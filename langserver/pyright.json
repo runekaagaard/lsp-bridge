@@ -11,7 +11,7 @@
       "typeshedPaths": [],
       "stubPath": "",
       "useLibraryCodeForTypes": true,
-      "diagnosticMode": "openFilesOnly",
+      "diagnosticMode": "workspace",
       "typeCheckingMode": "basic",
       "logLevel": "verbose",
       "autoSearchPaths": true,

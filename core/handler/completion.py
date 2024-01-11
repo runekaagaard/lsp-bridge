@@ -5,12 +5,10 @@ from functools import cmp_to_key
 from core.handler import Handler
 from core.utils import *
 
-
 class CompletionTriggerKind(Enum):
     Invoked = 1
     TriggerCharacter = 2
     TriggerForIncompleteCompletions = 3
-
 
 class Completion(Handler):
     name = "completion"
@@ -22,8 +20,7 @@ class Completion(Handler):
         self.method_server_name = self.method_server.server_info["name"]
 
         if char in self.method_server.completion_trigger_characters:
-            context = dict(triggerCharacter=char,
-                           triggerKind=CompletionTriggerKind.TriggerCharacter.value)
+            context = dict(triggerCharacter=char, triggerKind=CompletionTriggerKind.TriggerCharacter.value)
         else:
             context = dict(triggerKind=CompletionTriggerKind.Invoked.value)
         self.position = position
@@ -35,29 +32,31 @@ class Completion(Handler):
         return ''.join(c for c in sort_text if c.isdigit() or c == '.').rstrip('.')
 
     def compare_candidates(self, x, y):
-        prefix = self.prefix.lower()
+        # RUNE: When using prefix method we only wan't to sort by length.
+
+        # prefix = self.prefix.lower()
         x_label, y_label = x["label"].lower(), y["label"].lower()
-        x_icon, y_icon = x["icon"], y["icon"]
-        x_score, y_score = x["score"], y["score"]
-        x_sort_text, y_sort_text = map(self.parse_sort_value, (x["sortText"], y["sortText"]))
-        x_include_prefix, y_include_prefix = x_label.startswith(prefix), y_label.startswith(prefix)
-        x_method_name, y_method_name = x_label.split('(')[0], y_label.split('(')[0]
+        # x_icon, y_icon = x["icon"], y["icon"]
+        # x_score, y_score = x["score"], y["score"]
+        # x_sort_text, y_sort_text = map(self.parse_sort_value, (x["sortText"], y["sortText"]))
+        # x_include_prefix, y_include_prefix = x_label.startswith(prefix), y_label.startswith(prefix)
+        # x_method_name, y_method_name = x_label.split('(')[0], y_label.split('(')[0]
 
         # Sort file by score, score is provided by LSP server.
-        if x_score != y_score:
-            return 1 if x_score < y_score else -1
+        # if x_score != y_score:
+        #     return 1 if x_score < y_score else -1
 
-        # Sort file by sortText, sortText is provided by LSP server.
-        if x_sort_text and y_sort_text and x_sort_text != y_sort_text:
-            return -1 if x_sort_text < y_sort_text else 1
+        # # Sort file by sortText, sortText is provided by LSP server.
+        # if x_sort_text and y_sort_text and x_sort_text != y_sort_text:
+        #     return -1 if x_sort_text < y_sort_text else 1
 
-        # Sort by prefix.
-        if x_include_prefix != y_include_prefix:
-            return -1 if x_include_prefix else 1
+        # # Sort by prefix.
+        # if x_include_prefix != y_include_prefix:
+        #     return -1 if x_include_prefix else 1
 
-        # Sort by method name if both candidates are method.
-        if x_icon == y_icon == "method" and x_method_name != y_method_name:
-            return -1 if x_method_name < y_method_name else 1
+        # # Sort by method name if both candidates are method.
+        # if x_icon == y_icon == "method" and x_method_name != y_method_name:
+        #     return -1 if x_method_name < y_method_name else 1
 
         # Sort by length.
         return -1 if len(x_label) < len(y_label) else (1 if len(x_label) > len(y_label) else 0)
@@ -153,6 +152,10 @@ class Completion(Handler):
 
                 if self.file_action.enable_auto_import:
                     candidate["additionalTextEdits"] = item.get("additionalTextEdits", [])
+                    key += "_".join(
+                        hashlib.md5(x["newText"].encode('utf-8')).hexdigest()
+                        for x in candidate["additionalTextEdits"])
+                    candidate["key"] = key
 
                 completion_candidates.append(candidate)
 
@@ -163,25 +166,18 @@ class Completion(Handler):
             completion_candidates = sorted(completion_candidates, key=cmp_to_key(self.compare_candidates))
 
         log_time("Got completion candidates ({}) from '{}' for file {}".format(
-            len(completion_candidates),
-            self.method_server_name,
-            os.path.basename(self.file_action.filepath)))
+            len(completion_candidates), self.method_server_name, os.path.basename(self.file_action.filepath)))
 
         # Avoid returning too many items to cause Emacs to do GC operation.
-        completion_candidates = completion_candidates[:min(len(completion_candidates), self.file_action.completion_items_limit)]
+        completion_candidates = completion_candidates[:min(len(completion_candidates), self.file_action.
+                                                           completion_items_limit)]
 
         # Just call lsp-bridge-completion--record-items method when 'version' is newest version of file action.
         if self.version == self.file_action.version:
             log_time("Record completion candidates ({}) from '{}' for file {}".format(
-                len(completion_candidates),
-                self.method_server_name,
-                os.path.basename(self.file_action.filepath)))
+                len(completion_candidates), self.method_server_name, os.path.basename(self.file_action.filepath)))
 
-            eval_in_emacs("lsp-bridge-completion--record-items",
-                          self.file_action.filepath,
-                          get_lsp_file_host(),
-                          completion_candidates,
-                          self.position,
-                          self.method_server_name,
-                          self.method_server.completion_trigger_characters,
+            eval_in_emacs("lsp-bridge-completion--record-items", self.file_action.filepath, get_lsp_file_host(),
+                          completion_candidates, self.position,
+                          self.method_server_name, self.method_server.completion_trigger_characters,
                           self.file_action.get_lsp_server_names())
